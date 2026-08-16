@@ -34,7 +34,7 @@ the first visit; use Login on later visits to receive the stored history.
 The current server-machine URL for TA testing is:
 
 ```text
-http://10.50.20.162:8000
+http://172.17.0.6:8000
 ```
 
 If the network changes, run `ipconfig` on the server machine and replace the
