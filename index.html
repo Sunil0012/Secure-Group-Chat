@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Secure WebSocket Chat</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b1020; --panel:#121b32; --line:#2b3a61; --text:#edf2ff; --muted:#9eacd0; --accent:#6c7cff; --ok:#4ade80; --danger:#fb7185; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; font-family:Inter,ui-sans-serif,system-ui,sans-serif; background:radial-gradient(circle at 15% 0%,#1d2a5a 0,#0b1020 42%); color:var(--text); }
+    main { max-width:900px; margin:0 auto; padding:36px 18px; }
+    h1 { margin:0; font-size:clamp(30px,5vw,48px); letter-spacing:-1.5px; }
+    .eyebrow { margin:0 0 8px; color:#a8b5ff; font-weight:700; text-transform:uppercase; letter-spacing:2px; font-size:12px; }
+    .sub { color:var(--muted); margin:8px 0 24px; }
+    .card { background:#111a31e8; border:1px solid var(--line); border-radius:20px; padding:22px; box-shadow:0 22px 60px #0005; }
+    .auth { max-width:480px; margin:52px auto; }
+    label { display:block; color:var(--muted); font-size:13px; margin:14px 0 6px; }
+    input, select { width:100%; padding:12px 13px; color:var(--text); background:#0b1328; border:1px solid var(--line); border-radius:10px; font-size:15px; }
+    button { padding:12px 18px; color:white; background:var(--accent); border:0; border-radius:10px; font-weight:700; cursor:pointer; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    .auth button { width:100%; margin-top:18px; }
+    .status { color:var(--muted); min-height:22px; margin:10px 0; }
+    .status.ok { color:var(--ok); } .status.error { color:var(--danger); }
+    .hidden { display:none !important; }
+    .topbar { display:flex; justify-content:space-between; gap:12px; align-items:end; flex-wrap:wrap; }
+    .identity { color:var(--muted); font-size:13px; text-align:right; }
+    .identity strong { color:var(--text); }
+    .chat-box { height:min(60vh,560px); overflow-y:auto; margin-top:18px; padding:16px; border:1px solid var(--line); background:#0b1328; border-radius:16px; }
+    .message { margin:11px 0; line-height:1.45; overflow-wrap:anywhere; }
+    .meta { color:#91a1c8; font-size:12px; margin-right:6px; }
+    .badge { display:inline-block; margin-left:7px; padding:2px 6px; color:#9ff3ba; border:1px solid #287d4a; border-radius:999px; font-size:10px; }
+    .system { color:var(--muted); font-style:italic; } .security { color:#ff9aad; font-weight:700; }
+    form.compose { display:flex; gap:9px; margin-top:14px; } form.compose input { flex:1; }
+    .hint { color:var(--muted); font-size:12px; margin-top:12px; }
+  </style>
+</head>
+<body>
+  <main>
+    <section id="authCard" class="card auth">
+      <p class="eyebrow">WebSocket Chat Room</p>
+      <h1>Secure Persistent Chat</h1>
+      <p class="sub">Messages are encrypted, persisted, signed, and verified.</p>
+      <form id="authForm">
+        <label for="mode">Account action</label>
+        <select id="mode"><option value="register">Create account</option><option value="login">Login</option></select>
+        <label for="username">Username</label>
+        <input id="username" required pattern="[A-Za-z0-9_.-]{3,32}" autocomplete="username" placeholder="e.g. alice">
+        <label for="password">Password</label>
+        <input id="password" required minlength="6" type="password" autocomplete="current-password" placeholder="At least 6 characters">
+        <button id="authButton" type="submit">Connect and create account</button>
+      </form>
+      <div id="authStatus" class="status">Connecting to server...</div>
+      <p class="hint">Use the same username and password later to retrieve your account's signing identity.</p>
+    </section>
+
+    <section id="chatApp" class="hidden">
+      <div class="topbar">
+        <div><p class="eyebrow">Authenticated room</p><h1>Secure WebSocket Chat</h1><p id="roomStatus" class="sub">Loading history...</p></div>
+        <div id="identity" class="identity"></div>
+      </div>
+      <div id="messages" class="chat-box" aria-live="polite"></div>
+      <form id="chatForm" class="compose"><input id="messageInput" maxlength="1000" autocomplete="off" placeholder="Write a message..." disabled><button id="sendButton" disabled>Send</button></form>
+    </section>
+  </main>
+  <script>
+    const $ = id => document.getElementById(id);
+    const authCard = $("authCard"), chatApp = $("chatApp"), authForm = $("authForm");
+    const mode = $("mode"), username = $("username"), password = $("password");
+    const authButton = $("authButton"), authStatus = $("authStatus"), roomStatus = $("roomStatus");
+    const messages = $("messages"), input = $("messageInput"), sendButton = $("sendButton");
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(`${protocol}//${location.host}/chat`);
+    let authenticated = false;
+
+    mode.addEventListener("change", () => authButton.textContent = mode.value === "register" ? "Connect and create account" : "Login to secure room");
+    function setAuthStatus(text, type="") { authStatus.textContent = text; authStatus.className = `status ${type}`; }
+    function addMessage(message) {
+      const line = document.createElement("div");
+      if (message.type === "security") { line.className = "message security"; line.textContent = `[SECURITY ALERT] ${message.text}`; }
+      else if (message.type === "system") { line.className = "message system"; line.textContent = `[${message.time}] ${message.text}`; }
+      else if (message.type === "message") {
+        line.className = "message";
+        const meta = document.createElement("span"); meta.className = "meta"; meta.textContent = `[${message.time}] ${message.name}:`;
+        line.append(meta, ` ${message.text}`);
+        if (message.verified) { const badge = document.createElement("span"); badge.className = "badge"; badge.textContent = "signature verified"; line.appendChild(badge); }
+      } else return;
+      messages.appendChild(line); messages.scrollTop = messages.scrollHeight;
+      if (typeof message.online === "number") roomStatus.textContent = `Online: ${message.online} · History and live messages are protected`;
+    }
+    socket.addEventListener("open", () => setAuthStatus("Connected. Authenticate to continue.", "ok"));
+    socket.addEventListener("error", () => setAuthStatus("Could not connect to the WebSocket server.", "error"));
+    socket.addEventListener("close", () => { if (!authenticated) setAuthStatus("Connection closed.", "error"); else roomStatus.textContent = "Disconnected from server"; input.disabled = true; sendButton.disabled = true; });
+    socket.addEventListener("message", event => {
+      const message = JSON.parse(event.data);
+      if (message.type === "hello") return;
+      if (message.type === "auth_result") {
+        if (!message.ok) { authButton.disabled = false; setAuthStatus(message.error, "error"); return; }
+        authenticated = true; authCard.classList.add("hidden"); chatApp.classList.remove("hidden");
+        $("identity").innerHTML = `<strong>${message.username}</strong><br>Ed25519 key: ${message.key_fingerprint}`;
+        roomStatus.textContent = "Receiving verified chat history..."; input.disabled = false; sendButton.disabled = false; input.focus(); return;
+      }
+      if (message.type === "history_complete") { roomStatus.textContent = `${message.count} verified historical message(s) loaded`; return; }
+      addMessage(message);
+    });
+    authForm.addEventListener("submit", event => { event.preventDefault(); if (socket.readyState !== WebSocket.OPEN) return; authButton.disabled = true; setAuthStatus("Authenticating...", ""); socket.send(JSON.stringify({ type:"auth", mode:mode.value, username:username.value.trim(), password:password.value })); });
+    $("chatForm").addEventListener("submit", event => { event.preventDefault(); const text = input.value.trim(); if (!text || !authenticated) return; socket.send(JSON.stringify({ type:"message", text })); input.value = ""; input.focus(); });
+  </script>
+</body>
+</html>
