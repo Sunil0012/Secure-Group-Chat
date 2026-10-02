@@ -34,12 +34,8 @@ the first visit; use Login on later visits to receive the stored history.
 The current server-machine URL for TA testing is:
 
 ```text
-http://10.50.20.162:8000
+http://10.1.75.51:4205
 ```
-
-If the network changes, run `ipconfig` on the server machine and replace the
-address with its active IPv4 address. Allow inbound TCP port 8000 through the
-server machine's firewall.
 
 ## Tamper-detection demonstration
 
@@ -52,3 +48,11 @@ server machine's firewall.
 
 The report includes the database schema, message flow, screenshots, test
 results, complete source listings, and the four-member contribution report.
+
+## Contributions
+
+| Student | Assigned contribution | Share |
+|---|---|---|
+| Member 1: Khethavath Sunil Naik | Architecture, integration, server deployment, SQLite persistence, Report  | 33.34 |
+| Member 2: Dosapati Ashirvadhan  | AES-GCM encryption, integrity testing, client testing | 33.33 |
+| Member 3: Dara Navya | Authentication, Ed25519 key management and verification | 33.33% |

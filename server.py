@@ -30,7 +30,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
 HOST = "0.0.0.0"
-PORT = 8000
+PORT = int(os.environ.get("PORT", "8000"))
 ROOM_ID = "main-room"
 WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 PBKDF2_ITERATIONS = 210_000
